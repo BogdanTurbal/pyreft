@@ -318,30 +318,37 @@ class OrthoAddVecIntervention(
     DistributedRepresentationIntervention
 ):
     """
-    OrthoAddVec_i(h) = h + s_i r_i.
+    OrthoAddVec_i(h) = h + w_i.
 
-    r_1, ..., r_n are orthonormal columns, kept that way by an orthogonal
-    parametrization. s_i are free scales, so the trained vectors w_i = s_i r_i
-    stay orthogonal to each other and can have different lengths.
-    Scales start at 0, so every edit starts at 0.
+    w_i are the rows of a Gram-Schmidt orthogonalization of a free matrix.
+    They stay orthogonal while their lengths can change. The matrix starts
+    as small Gaussian noise. Starting at 0 makes the added vector and its
+    gradient both 0, so training never moves.
     Set `active` to choose which vector is added.
     """
     def __init__(self, **kwargs):
         n_vectors = kwargs.pop("n_vectors", 32)
         super().__init__(**kwargs, keep_last_dim=True)
         dtype = kwargs["dtype"] if "dtype" in kwargs else torch.bfloat16
-        rotate_layer = LowRankRotateLayer(self.embed_dim, n_vectors, init_orth=True)
-        self.rotate_layer = torch.nn.utils.parametrizations.orthogonal(rotate_layer)
-        self.scales = torch.nn.Parameter(torch.zeros(n_vectors, dtype=dtype), requires_grad=True)
+        embed_dim = int(self.embed_dim)
+        raw = torch.randn(n_vectors, embed_dim) * (embed_dim ** -0.5)
+        self.raw = torch.nn.Parameter(raw.to(dtype), requires_grad=True)
         self.active = 0
         self.dropout = torch.nn.Dropout(kwargs["dropout"] if "dropout" in kwargs else 0.0)
 
     def vectors(self):
-        # (n_vectors, d). Columns of rotate_layer.weight are orthonormal.
-        # Keep this product in float32. The orthogonal map is not stable in float16.
-        directions = self.rotate_layer.weight.T
-        scales = self.scales.to(directions.dtype)
-        return scales[:, None] * directions
+        # Rows are orthogonal. Computed in float32 so Gram-Schmidt stays stable.
+        raw = self.raw.float()
+        basis = []
+        for i in range(raw.shape[0]):
+            v = raw[i]
+            for previous in basis:
+                v = v - torch.dot(previous, v) * previous
+            denom = v.norm().clamp(min=1e-6)
+            basis.append(v / denom)
+        directions = torch.stack(basis, dim=0)
+        lengths = raw.norm(dim=-1).clamp(min=1e-6)
+        return (lengths[:, None] * directions).to(self.raw.dtype)
 
     def forward(
         self, base, source=None, subspaces=None
