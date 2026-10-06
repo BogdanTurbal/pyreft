@@ -278,9 +278,9 @@ class SparseAddVecIntervention(
     """
     SparseAddVec(h) = h + alpha * w.
 
-    w starts as Gaussian noise, N(0, 1/d). A random fraction of its
-    coordinates (default 25%) is trainable. The rest stay at their
-    initial values. alpha starts at 1, so the initial edit is w itself.
+    w starts at 0, so the edit starts at 0. A random fraction of its
+    coordinates (default 25%) is trainable. The rest stay 0. alpha starts
+    at 1. It must not start at 0, because then both gradients vanish.
     """
     def __init__(self, **kwargs):
         fraction = float(kwargs.pop("trainable_fraction", 0.25))
@@ -288,18 +288,15 @@ class SparseAddVecIntervention(
         super().__init__(**kwargs, keep_last_dim=True)
         dtype = kwargs["dtype"] if "dtype" in kwargs else torch.bfloat16
         embed_dim = int(self.embed_dim)
-        init = torch.randn(embed_dim) * (embed_dim ** -0.5)
         n_trainable = min(embed_dim, max(1, int(round(fraction * embed_dim))))
         generator = torch.Generator()
         generator.manual_seed(mask_seed)
         chosen = torch.randperm(embed_dim, generator=generator)[:n_trainable]
         mask = torch.zeros(embed_dim, dtype=torch.bool)
         mask[chosen] = True
-        frozen = init.clone()
-        frozen[mask] = 0
-        self.register_buffer("w_frozen", frozen.to(dtype))
+        self.register_buffer("w_frozen", torch.zeros(embed_dim, dtype=dtype))
         self.register_buffer("mask", mask)
-        self.w_trainable = torch.nn.Parameter(init[mask].to(dtype).clone(), requires_grad=True)
+        self.w_trainable = torch.nn.Parameter(torch.zeros(n_trainable, dtype=dtype), requires_grad=True)
         self.alpha = torch.nn.Parameter(torch.ones((), dtype=dtype), requires_grad=True)
         self.dropout = torch.nn.Dropout(kwargs["dropout"] if "dropout" in kwargs else 0.0)
 
