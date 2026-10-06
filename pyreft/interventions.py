@@ -246,6 +246,30 @@ class OneVecIntervention(
         return base + self.dropout(delta).to(base.dtype)
 
 
+class AddVecIntervention(
+    SourcelessIntervention,
+    TrainableIntervention, 
+    DistributedRepresentationIntervention
+):
+    """
+    AddVec(h) = h + w, with a single w in R^d.
+    The same vector is added at every intervened position.
+    w is zero-initialized, so the edit is 0 at the start of training.
+    """
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs, keep_last_dim=True)
+        dtype = kwargs["dtype"] if "dtype" in kwargs else torch.bfloat16
+        self.w = torch.nn.Parameter(
+            torch.zeros(self.embed_dim, dtype=dtype), requires_grad=True)
+        self.dropout = torch.nn.Dropout(kwargs["dropout"] if "dropout" in kwargs else 0.0)
+
+    def forward(
+        self, base, source=None, subspaces=None
+    ):
+        delta = self.w.to(base.dtype)
+        return base + self.dropout(delta)
+
+
 class NodireftIntervention(
     SourcelessIntervention,
     TrainableIntervention, 

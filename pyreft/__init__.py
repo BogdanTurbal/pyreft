@@ -24,7 +24,8 @@ from .interventions import (
     DireftIntervention,
     NodireftIntervention,
     Rank1Intervention,
-    OneVecIntervention
+    OneVecIntervention,
+    AddVecIntervention
 )
 
 # dataloader helpers
