@@ -25,7 +25,8 @@ from .interventions import (
     NodireftIntervention,
     Rank1Intervention,
     OneVecIntervention,
-    AddVecIntervention
+    AddVecIntervention,
+    OrthoAddVecIntervention
 )
 
 # dataloader helpers

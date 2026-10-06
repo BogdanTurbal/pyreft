@@ -270,6 +270,44 @@ class AddVecIntervention(
         return base + self.dropout(delta)
 
 
+class OrthoAddVecIntervention(
+    SourcelessIntervention,
+    TrainableIntervention, 
+    DistributedRepresentationIntervention
+):
+    """
+    OrthoAddVec_i(h) = h + s_i r_i.
+
+    r_1, ..., r_n are orthonormal columns, kept that way by an orthogonal
+    parametrization. s_i are free scales, so the trained vectors w_i = s_i r_i
+    stay orthogonal to each other and can have different lengths.
+    Scales start at 0, so every edit starts at 0.
+    Set `active` to choose which vector is added.
+    """
+    def __init__(self, **kwargs):
+        n_vectors = kwargs.pop("n_vectors", 32)
+        super().__init__(**kwargs, keep_last_dim=True)
+        dtype = kwargs["dtype"] if "dtype" in kwargs else torch.bfloat16
+        rotate_layer = LowRankRotateLayer(self.embed_dim, n_vectors, init_orth=True)
+        self.rotate_layer = torch.nn.utils.parametrizations.orthogonal(rotate_layer)
+        self.scales = torch.nn.Parameter(torch.zeros(n_vectors, dtype=dtype), requires_grad=True)
+        self.active = 0
+        self.dropout = torch.nn.Dropout(kwargs["dropout"] if "dropout" in kwargs else 0.0)
+
+    def vectors(self):
+        # (n_vectors, d). Columns of rotate_layer.weight are orthonormal.
+        # Keep this product in float32. The orthogonal map is not stable in float16.
+        directions = self.rotate_layer.weight.T
+        scales = self.scales.to(directions.dtype)
+        return scales[:, None] * directions
+
+    def forward(
+        self, base, source=None, subspaces=None
+    ):
+        w = self.vectors()[self.active]
+        return base + self.dropout(w).to(base.dtype)
+
+
 class NodireftIntervention(
     SourcelessIntervention,
     TrainableIntervention, 

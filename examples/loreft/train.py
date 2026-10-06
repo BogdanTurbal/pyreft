@@ -44,6 +44,7 @@ from pyreft import (
     Rank1Intervention,    # h + (h · v + b) w
     OneVecIntervention,   # h + (h · w) w
     AddVecIntervention,   # h + w
+    OrthoAddVecIntervention,  # h + s_i r_i, orthogonal directions
     ReftDataCollator
 )
 
@@ -76,6 +77,7 @@ intervention_mapping = {
     "Rank1Intervention": Rank1Intervention,
     "OneVecIntervention": OneVecIntervention,
     "AddVecIntervention": AddVecIntervention,
+    "OrthoAddVecIntervention": OrthoAddVecIntervention,
 }
 
 
