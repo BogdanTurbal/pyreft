@@ -26,6 +26,7 @@ from .interventions import (
     Rank1Intervention,
     OneVecIntervention,
     AddVecIntervention,
+    SparseAddVecIntervention,
     OrthoAddVecIntervention
 )
 

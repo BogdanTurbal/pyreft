@@ -270,6 +270,50 @@ class AddVecIntervention(
         return base + self.dropout(delta)
 
 
+class SparseAddVecIntervention(
+    SourcelessIntervention,
+    TrainableIntervention, 
+    DistributedRepresentationIntervention
+):
+    """
+    SparseAddVec(h) = h + alpha * w.
+
+    w starts as Gaussian noise, N(0, 1/d). A random fraction of its
+    coordinates (default 25%) is trainable. The rest stay at their
+    initial values. alpha starts at 1, so the initial edit is w itself.
+    """
+    def __init__(self, **kwargs):
+        fraction = kwargs.pop("trainable_fraction", 0.25)
+        mask_seed = kwargs.pop("mask_seed", 42)
+        super().__init__(**kwargs, keep_last_dim=True)
+        dtype = kwargs["dtype"] if "dtype" in kwargs else torch.bfloat16
+        init = torch.randn(self.embed_dim) * (self.embed_dim ** -0.5)
+        n_trainable = max(1, int(round(fraction * self.embed_dim)))
+        generator = torch.Generator()
+        generator.manual_seed(mask_seed)
+        chosen = torch.randperm(self.embed_dim, generator=generator)[:n_trainable]
+        mask = torch.zeros(self.embed_dim, dtype=torch.bool)
+        mask[chosen] = True
+        frozen = init.clone()
+        frozen[mask] = 0
+        self.register_buffer("w_frozen", frozen.to(dtype))
+        self.register_buffer("mask", mask)
+        self.w_trainable = torch.nn.Parameter(init[mask].to(dtype).clone(), requires_grad=True)
+        self.alpha = torch.nn.Parameter(torch.ones((), dtype=dtype), requires_grad=True)
+        self.dropout = torch.nn.Dropout(kwargs["dropout"] if "dropout" in kwargs else 0.0)
+
+    def steering_vector(self):
+        values = self.w_frozen.to(self.w_trainable.dtype)
+        index = self.mask.nonzero(as_tuple=False).squeeze(-1)
+        return values.index_copy(0, index, self.w_trainable.to(values.dtype))
+
+    def forward(
+        self, base, source=None, subspaces=None
+    ):
+        delta = self.alpha * self.steering_vector()
+        return base + self.dropout(delta).to(base.dtype)
+
+
 class OrthoAddVecIntervention(
     SourcelessIntervention,
     TrainableIntervention, 
