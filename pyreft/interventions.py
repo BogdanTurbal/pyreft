@@ -283,16 +283,17 @@ class SparseAddVecIntervention(
     initial values. alpha starts at 1, so the initial edit is w itself.
     """
     def __init__(self, **kwargs):
-        fraction = kwargs.pop("trainable_fraction", 0.25)
-        mask_seed = kwargs.pop("mask_seed", 42)
+        fraction = float(kwargs.pop("trainable_fraction", 0.25))
+        mask_seed = int(kwargs.pop("mask_seed", 42))
         super().__init__(**kwargs, keep_last_dim=True)
         dtype = kwargs["dtype"] if "dtype" in kwargs else torch.bfloat16
-        init = torch.randn(self.embed_dim) * (self.embed_dim ** -0.5)
-        n_trainable = max(1, int(round(fraction * self.embed_dim)))
+        embed_dim = int(self.embed_dim)
+        init = torch.randn(embed_dim) * (embed_dim ** -0.5)
+        n_trainable = min(embed_dim, max(1, int(round(fraction * embed_dim))))
         generator = torch.Generator()
         generator.manual_seed(mask_seed)
-        chosen = torch.randperm(self.embed_dim, generator=generator)[:n_trainable]
-        mask = torch.zeros(self.embed_dim, dtype=torch.bool)
+        chosen = torch.randperm(embed_dim, generator=generator)[:n_trainable]
+        mask = torch.zeros(embed_dim, dtype=torch.bool)
         mask[chosen] = True
         frozen = init.clone()
         frozen[mask] = 0
