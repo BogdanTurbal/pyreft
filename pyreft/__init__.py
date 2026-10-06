@@ -23,7 +23,8 @@ from .interventions import (
     LobireftIntervention,
     DireftIntervention,
     NodireftIntervention,
-    Rank1Intervention
+    Rank1Intervention,
+    OneVecIntervention
 )
 
 # dataloader helpers

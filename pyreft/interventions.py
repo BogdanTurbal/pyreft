@@ -219,6 +219,33 @@ class Rank1Intervention(
         return base + self.dropout(delta).to(base.dtype)
 
 
+class OneVecIntervention(
+    SourcelessIntervention,
+    TrainableIntervention, 
+    DistributedRepresentationIntervention
+):
+    """
+    OneVec(h) = h + (h · w) w, with a single w in R^d.
+    Hidden states aligned with w are pushed farther along w.
+    w is drawn from N(0, 1/d). Zero initialization has no gradient.
+    """
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs, keep_last_dim=True)
+        dtype = kwargs["dtype"] if "dtype" in kwargs else torch.bfloat16
+        w = torch.empty(self.embed_dim, dtype=dtype)
+        torch.nn.init.normal_(w, mean=0.0, std=self.embed_dim ** -0.5)
+        self.w = torch.nn.Parameter(w, requires_grad=True)
+        self.dropout = torch.nn.Dropout(kwargs["dropout"] if "dropout" in kwargs else 0.0)
+
+    def forward(
+        self, base, source=None, subspaces=None
+    ):
+        cast_base = base.to(self.w.dtype)
+        scale = torch.matmul(cast_base, self.w)
+        delta = scale.unsqueeze(-1) * self.w
+        return base + self.dropout(delta).to(base.dtype)
+
+
 class NodireftIntervention(
     SourcelessIntervention,
     TrainableIntervention, 
