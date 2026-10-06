@@ -190,6 +190,35 @@ class DireftIntervention(
         return self.dropout(output.to(base.dtype))
 
 
+class Rank1Intervention(
+    SourcelessIntervention,
+    TrainableIntervention, 
+    DistributedRepresentationIntervention
+):
+    """
+    Rank1(h) = h + (h · v + b) w, with v, w in R^d and b a scalar.
+    w is zero-initialized, so the edit is 0 at the start of training.
+    """
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs, keep_last_dim=True)
+        dtype = kwargs["dtype"] if "dtype" in kwargs else torch.bfloat16
+        v = torch.empty(self.embed_dim, dtype=dtype)
+        torch.nn.init.normal_(v, mean=0.0, std=self.embed_dim ** -0.5)
+        self.v = torch.nn.Parameter(v, requires_grad=True)
+        self.w = torch.nn.Parameter(
+            torch.zeros(self.embed_dim, dtype=dtype), requires_grad=True)
+        self.b = torch.nn.Parameter(torch.zeros((), dtype=dtype), requires_grad=True)
+        self.dropout = torch.nn.Dropout(kwargs["dropout"] if "dropout" in kwargs else 0.0)
+
+    def forward(
+        self, base, source=None, subspaces=None
+    ):
+        cast_base = base.to(self.v.dtype)
+        scale = torch.matmul(cast_base, self.v) + self.b
+        delta = scale.unsqueeze(-1) * self.w
+        return base + self.dropout(delta).to(base.dtype)
+
+
 class NodireftIntervention(
     SourcelessIntervention,
     TrainableIntervention, 

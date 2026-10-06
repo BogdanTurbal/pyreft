@@ -19,6 +19,7 @@ from dataclasses import dataclass
 from typing import Dict, Optional, Sequence, Union, Iterable
 
 from tqdm import tqdm
+import inspect
 import os
 import torch
 import re
@@ -65,6 +66,16 @@ def make_dataloader(
 
 
 class ReftTrainer(Trainer):
+    def __init__(self, *args, tokenizer=None, processing_class=None, **kwargs):
+        # Transformers 5 removed Trainer(tokenizer=...) in favor of processing_class.
+        if processing_class is None and tokenizer is not None:
+            processing_class = tokenizer
+        trainer_params = inspect.signature(Trainer.__init__).parameters
+        if "processing_class" in trainer_params:
+            super().__init__(*args, processing_class=processing_class, **kwargs)
+        else:
+            super().__init__(*args, tokenizer=processing_class, **kwargs)
+
     def save_model(self, output_dir, _internal_call=False, **kwargs):
         # Handle CPU training and non-distributed cases
         try:

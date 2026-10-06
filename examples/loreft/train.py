@@ -41,6 +41,7 @@ from pyreft import (
     LobireftIntervention, # low-rank bitfit reft
     DireftIntervention,   # direct edit reft
     NodireftIntervention, # remove ortho + direct edit reft <- this is like LoRA on time-step
+    Rank1Intervention,    # h + (h · v + b) w
     ReftDataCollator
 )
 
@@ -70,6 +71,7 @@ intervention_mapping = {
     "LobireftIntervention": LobireftIntervention,
     "DireftIntervention": DireftIntervention,
     "NodireftIntervention": NodireftIntervention,
+    "Rank1Intervention": Rank1Intervention,
 }
 
 

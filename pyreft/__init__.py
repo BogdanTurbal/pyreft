@@ -22,7 +22,8 @@ from .interventions import (
     ConsreftIntervention,
     LobireftIntervention,
     DireftIntervention,
-    NodireftIntervention
+    NodireftIntervention,
+    Rank1Intervention
 )
 
 # dataloader helpers
